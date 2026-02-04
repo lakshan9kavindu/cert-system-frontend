@@ -113,7 +113,7 @@ export default function AdminSidebar({ open, onToggle, onNavigate }) {
       <div className="sm:hidden fixed left-0 right-0 top-0 z-30">
         <div className="bg-gradient-to-r from-[#6d34d6] to-[#7a46e6] text-white px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2 font-semibold tracking-wide">
-            <img src={logo} alt="CertiChain logo" className="w-7 h-7 rounded-full object-cover" />
+            <img src={logo} alt="CertiChain logo" className="w-40 h-8 object-cover" />
             <span className="sr-only">CertiChain</span>
           </div>
           <button onClick={onToggle} aria-label="Toggle mobile menu" className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center">
