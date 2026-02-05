@@ -1,14 +1,35 @@
-import React from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { UploadCloud } from "lucide-react";
+import { universityAPI, authAPI } from "../../services/api";
+import useMetaMask from "../../hooks/useMetaMask";
 
 const BulkUpload = () => {
   const fileInputRef = useRef(null);
+  const resetTimeoutRef = useRef(null);
   const [csvData, setCsvData] = useState([]);
   const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
   const [preview, setPreview] = useState([]);
   const [uploadProgress, setUploadProgress] = useState(0);
+  
+  // MetaMask integration
+  const { 
+    connected: metamaskConnected, 
+    address: metamaskAddress, 
+    connect: connectMetaMask,
+    error: metamaskError
+  } = useMetaMask();
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (resetTimeoutRef.current) {
+        clearTimeout(resetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const parseCSV = (text) => {
     const lines = text.trim().split('\n');
@@ -94,47 +115,207 @@ const BulkUpload = () => {
       return;
     }
 
+    // Check MetaMask connection
+    if (!metamaskConnected) {
+      setMessage({ type: 'error', text: '❌ Please connect MetaMask first to sign certificates for blockchain' });
+      return;
+    }
+
     setLoading(true);
     setMessage({ type: '', text: '' });
     setUploadProgress(0);
 
     try {
-      // Simulate progress updates while uploading
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) return prev;
-          return prev + Math.random() * 30;
-        });
-      }, 200);
-
-      const response = await universityAPI.bulkIssueCertificates({
+      // Step 1: Create certificates in database (20%)
+      setCurrentStep('Creating certificate records...');
+      setUploadProgress(10);
+      
+      const bulkResponse = await universityAPI.bulkIssueCertificates({
         certificates: csvData,
       });
 
-      clearInterval(progressInterval);
-      setUploadProgress(100);
+      console.log('Bulk create response:', bulkResponse.data);
+      console.log('Results from backend:', bulkResponse.data?.results);
 
-      const successCount = response.data?.successCount ?? response.data?.successful ?? csvData.length;
-      const failureCount = response.data?.failureCount ?? 0;
-      const totalCount = successCount + failureCount || csvData.length;
-      setMessage({ 
-        type: 'success', 
-        text: `✅ Successfully uploaded ${successCount} out of ${totalCount} certificates!` 
+      if (!bulkResponse.data?.results || bulkResponse.data.results.length === 0) {
+        throw new Error('Failed to create certificates in database');
+      }
+
+      setUploadProgress(20);
+
+      // Step 2: Get university profile for issuer name
+      setCurrentStep('Fetching university information...');
+      const profileResponse = await authAPI.getUniversityProfile();
+      const issuerName = profileResponse.data?.institute?.institute_name || 'University';
+      
+      setUploadProgress(30);
+
+      // Step 3: Prepare certificate data with student names
+      setCurrentStep('Preparing certificates for blockchain...');
+      const certificatesWithDetails = await Promise.all(
+        bulkResponse.data.results.map(async (result) => {
+          const originalCert = csvData.find(c => c.student_id === result.student_id);
+          
+          if (!originalCert) {
+            console.error('Could not find original cert data for student_id:', result.student_id);
+            console.error('Available CSV data student IDs:', csvData.map(c => c.student_id));
+            console.error('Result object:', result);
+          }
+          
+          // Try to get student name from backend
+          let studentName = result.student_id; // Fallback to ID
+          try {
+            // Note: This assumes student data is accessible. Adjust if backend doesn't provide this.
+            studentName = result.student_name || result.student_id;
+          } catch {}
+          
+          return {
+            student_id: result.student_id,
+            course_name: originalCert?.course_name || 'Unknown',
+            grade: originalCert?.grade || 'N/A',
+            issued_date: new Date().toISOString().split('T')[0],
+            student_name: studentName
+          };
+        })
+      );
+      
+      console.log('Prepared certificates with details:', certificatesWithDetails);
+
+      setUploadProgress(40);
+
+      // Step 4: Get authorization message from backend
+      setCurrentStep('Getting authorization message...');
+      const authPayload = {
+        certificate_count: certificatesWithDetails.length,
+        certificates: certificatesWithDetails.map(c => ({
+          student_id: c.student_id,
+          course_name: c.course_name,
+          grade: c.grade,
+          issued_date: c.issued_date
+        }))
+      };
+      
+      console.log('Sending bulk auth request:', authPayload);
+      console.log('Number of certificates:', authPayload.certificates.length);
+      console.log('Certificate count field:', authPayload.certificate_count);
+      
+      const authResponse = await universityAPI.getBulkAuthMessage(authPayload);
+      
+      console.log('Auth response:', authResponse);
+      console.log('Auth response data:', authResponse.data);
+
+      const messageHash = authResponse.data?.auth_hash || authResponse.data?.message_hash;
+      const batchId = authResponse.data?.batch_id;
+      const certificateCount = authResponse.data?.certificate_count;
+      const expiry = authResponse.data?.expiry;
+      
+      if (!messageHash) {
+        console.error('Missing auth_hash in response:', authResponse.data);
+        throw new Error('Failed to get authorization hash from backend. Response: ' + JSON.stringify(authResponse.data));
+      }
+      
+      console.log('Using auth hash:', messageHash);
+      console.log('Batch ID:', batchId);
+      console.log('Certificate count:', certificateCount);
+      console.log('Expiry:', expiry);
+
+      setUploadProgress(50);
+
+      // Step 5: Request MetaMask signature
+      setCurrentStep('Waiting for MetaMask signature...');
+      setMessage({ type: 'info', text: '🔐 Please sign the message in MetaMask to authorize bulk issuance' });
+      
+      const signature = await window.ethereum.request({
+        method: 'personal_sign',
+        params: [messageHash, metamaskAddress]
       });
 
-      // Reset form after 2 seconds
-      setTimeout(() => {
+      setUploadProgress(60);
+      setMessage({ type: '', text: '' });
+
+      // Step 6: Submit to blockchain
+      setCurrentStep('Issuing certificates on blockchain...');
+      const certsForBlockchain = bulkResponse.data.results.map((result, index) => ({
+        certId: result.certificate_id,
+        studentName: certificatesWithDetails[index].student_name,
+        courseName: certificatesWithDetails[index].course_name,
+        issueDate: certificatesWithDetails[index].issued_date,
+        issuerName: issuerName
+      }));
+
+      const blockchainPayload = {
+        auth_hash: messageHash,
+        auth_signature: signature,
+        signer_address: metamaskAddress,
+        batch_id: batchId,
+        certificate_count: certificateCount,
+        expiry: expiry,
+        certificates: certsForBlockchain
+      };
+      
+      console.log('Blockchain submission payload:', blockchainPayload);
+
+      const blockchainResponse = await universityAPI.bulkIssueSigned(blockchainPayload);
+
+      console.log('Blockchain response:', blockchainResponse);
+      console.log('Blockchain response data:', blockchainResponse.data);
+      console.log('Success count:', blockchainResponse.data?.successCount);
+      console.log('Failure count:', blockchainResponse.data?.failureCount);
+
+      // Check if blockchain submission had an error
+      if (blockchainResponse.data?.error) {
+        throw new Error('Blockchain submission error: ' + blockchainResponse.data.error);
+      }
+      
+      if (!blockchainResponse.data?.success && blockchainResponse.data?.success !== undefined) {
+        throw new Error('Blockchain submission failed: ' + (blockchainResponse.data?.message || 'Unknown error'));
+      }
+
+      setUploadProgress(100);
+      setCurrentStep('Complete!');
+
+      const successCount = blockchainResponse.data?.successCount ?? blockchainResponse.data?.success_count ?? certsForBlockchain.length;
+      const failureCount = blockchainResponse.data?.failureCount ?? blockchainResponse.data?.failure_count ?? 0;
+      
+      console.log('Final success count:', successCount);
+      console.log('Final failure count:', failureCount);
+      
+      setMessage({ 
+        type: 'success', 
+        text: `✅ Successfully issued ${successCount} certificates on blockchain!` + 
+              (failureCount > 0 ? ` (${failureCount} failed)` : '')
+      });
+
+      // Reset form after 5 seconds
+      resetTimeoutRef.current = setTimeout(() => {
         setCsvData([]);
         setFileName('');
         setPreview([]);
         setUploadProgress(0);
+        setCurrentStep('');
         setMessage({ type: '', text: '' });
         if (fileInputRef.current) fileInputRef.current.value = '';
-      }, 2000);
+      }, 5000);
+      
     } catch (err) {
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to upload certificates';
+      console.error('Bulk upload error:', err);
+      console.error('Error response data:', err.response?.data);
+      console.error('Error status:', err.response?.status);
+      let errorMsg = 'Failed to upload certificates';
+      
+      if (err.code === 4001) {
+        errorMsg = 'MetaMask signature rejected by user';
+      } else if (err.response?.data?.error) {
+        errorMsg = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      
       setMessage({ type: 'error', text: '❌ ' + errorMsg });
       setUploadProgress(0);
+      setCurrentStep('');
     } finally {
       setLoading(false);
     }
@@ -182,17 +363,24 @@ const BulkUpload = () => {
           </div>
 
           {/* Upload Dropzone */}
-          <div className="relative group cursor-pointer">
+          {csvData.length === 0 && (
+          <div
+            className="relative group"
+            onDrop={handleDragDrop}
+            onDragOver={(e) => e.preventDefault()}
+          >
             <input
               type="file"
               accept=".csv"
+              ref={fileInputRef}
+              onChange={handleInputChange}
               className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer"
             />
-            <div className="border-2 border-dashed border-[#3B82F6] rounded-2xl p-10 md:p-14 flex flex-col items-center justify-center gap-3 bg-white hover:bg-blue-50 transition-colors">
+            <div className="border-2 border-dashed border-[#3B82F6] rounded-2xl p-10 md:p-14 flex flex-col items-center justify-center gap-3 bg-white hover:bg-blue-50 transition-colors pointer-events-none">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">📂</span>
                 <span className="text-[#3B82F6] font-bold text-lg md:text-xl underline">
-                  {fileName ? `✅ ${fileName}` : 'Click to upload CSV or drag & drop'}
+                  Click to upload CSV or drag & drop
                 </span>
               </div>
               <p className="text-gray-400 text-sm font-medium">
@@ -200,6 +388,189 @@ const BulkUpload = () => {
               </p>
             </div>
           </div>
+          )}
+
+          {/* Success/Error/Info Messages */}
+          {message.text && (
+            <div className={`${
+              message.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 
+              message.type === 'info' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+              'bg-red-50 border-red-200 text-red-700'
+            } border rounded-lg p-4`}>
+              <p className="font-semibold text-sm">{message.text}</p>
+            </div>
+          )}
+
+          {/* MetaMask Connection Status */}
+          {preview.length > 0 && !loading && uploadProgress === 0 && (
+            <div className={`${
+              metamaskConnected ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
+            } border p-4 rounded-lg`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{metamaskConnected ? '✅' : '⚠️'}</span>
+                  <div>
+                    <p className={`${
+                      metamaskConnected ? 'text-green-700' : 'text-orange-700'
+                    } font-bold text-sm`}>
+                      MetaMask Status: {metamaskConnected ? 'Connected' : 'Not Connected'}
+                    </p>
+                    {metamaskConnected && (
+                      <p className="text-xs text-gray-600 font-mono">
+                        {metamaskAddress?.slice(0, 6)}...{metamaskAddress?.slice(-4)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {!metamaskConnected && (
+                  <button
+                    onClick={connectMetaMask}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all"
+                  >
+                    Connect MetaMask
+                  </button>
+                )}
+              </div>
+              {!metamaskConnected && (
+                <p className="text-orange-600 text-xs mt-2">
+                  🔒 MetaMask is required to sign and authorize certificates for blockchain issuance
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Preview Table */}
+          {preview.length > 0 && !loading && uploadProgress === 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="bg-gradient-to-r from-purple-500 to-purple-600 px-6 py-4">
+                <h3 className="text-white font-bold text-lg">
+                  Preview - First 5 Certificates
+                </h3>
+                <p className="text-purple-100 text-sm">
+                  Total certificates to upload: <span className="font-bold">{csvData.length}</span>
+                </p>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">#</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Student ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Course Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Grade</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {preview.map((row, index) => (
+                      <tr key={index} className="hover:bg-purple-50 transition-colors">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{index + 1}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{row.student_id}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{row.course_name}</td>
+                        <td className="px-6 py-4 text-sm font-bold text-purple-600">{row.grade}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="bg-gray-50 px-6 py-4 flex justify-between items-center">
+                <p className="text-sm text-gray-600">
+                  {csvData.length > 5 ? `Showing 5 of ${csvData.length} certificates` : `All ${csvData.length} certificates shown`}
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+                      setCsvData([]);
+                      setFileName('');
+                      setPreview([]);
+                      setCurrentStep('');
+                      setMessage({ type: '', text: '' });
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    className="px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-100 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpload}
+                    disabled={loading || !metamaskConnected}
+                    className="px-6 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg text-sm font-bold hover:from-purple-600 hover:to-purple-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {!metamaskConnected ? '🔒 Connect MetaMask First' : `🚀 Issue ${csvData.length} Certificates on Blockchain`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Upload Progress */}
+          {loading && (
+            <div className="bg-white rounded-xl border border-purple-200 p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">Processing Bulk Upload</h3>
+                  {currentStep && (
+                    <p className="text-sm text-purple-600 font-medium mt-1">{currentStep}</p>
+                  )}
+                </div>
+                <span className="text-2xl font-extrabold text-purple-600">{Math.round(uploadProgress)}%</span>
+              </div>
+              
+              <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                <div 
+                  className="bg-gradient-to-r from-purple-500 to-purple-600 h-4 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+              
+              <div className="mt-4 space-y-2 text-xs text-gray-600">
+                <div className="flex items-center gap-2">
+                  <span className={uploadProgress >= 20 ? 'text-green-600' : 'text-gray-400'}>✓</span>
+                  <span>Create certificate records in database</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={uploadProgress >= 50 ? 'text-green-600' : 'text-gray-400'}>✓</span>
+                  <span>Get authorization message</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={uploadProgress >= 60 ? 'text-green-600' : 'text-gray-400'}>✓</span>
+                  <span>Sign with MetaMask</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={uploadProgress >= 100 ? 'text-green-600' : 'text-gray-400'}>✓</span>
+                  <span>Issue certificates on blockchain</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Success State */}
+          {uploadProgress === 100 && !loading && (
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border-2 border-green-300 p-8 text-center">
+              <div className="text-6xl mb-4">✅</div>
+              <h3 className="text-2xl font-bold text-green-700 mb-2">Upload Complete!</h3>
+              <p className="text-green-600 text-lg mb-6">
+                All certificates have been successfully issued on the blockchain
+              </p>
+              <button
+                onClick={() => {
+                  if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+                  setCsvData([]);
+                  setFileName('');
+                  setPreview([]);
+                  setUploadProgress(0);
+                  setCurrentStep('');
+                  setMessage({ type: '', text: '' });
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold transition-all shadow-md"
+              >
+                Upload Another File
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

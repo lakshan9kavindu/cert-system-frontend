@@ -1,11 +1,56 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { universityAPI, paymentAPI } from "../../services/api";
 
-const Overview = () => {
-  const stats = [
+const InstituteDashboard = () => {
+  const navigate = useNavigate();
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState([
     { label: "Total Certificates", value: "0" },
-    { label: "Verification Status", value: "Approved" },
-    { label: "Wallet Balance", value: "0.5730" },
-  ];
+    { label: "Verification Status", value: "Loading..." },
+    { label: "Wallet Balance", value: "0.00" },
+  ]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch profile for verification status and wallet address
+      const profileResponse = await universityAPI.getProfile();
+      const profile = profileResponse.data.institute;
+      
+      // Fetch dashboard stats
+      const dashboardResponse = await universityAPI.getDashboard();
+      const totalCerts = dashboardResponse.data.totalCertificatesIssued || 0;
+      
+      // Fetch wallet balance
+      let walletBalance = "0.00";
+      if (profile?.wallet_address) {
+        try {
+          const balanceResponse = await paymentAPI.getBalance(profile.wallet_address);
+          walletBalance = parseFloat(balanceResponse.data?.data?.balancePol || '0').toFixed(4);
+        } catch (err) {
+          console.error('Failed to load balance:', err);
+        }
+      }
+
+      setStats([
+        { label: "Total Certificates", value: totalCerts.toString() },
+        { label: "Verification Status", value: (profile?.verification_status || "Unknown").toUpperCase() },
+        { label: "Wallet Balance", value: walletBalance },
+      ]);
+    } catch (err) {
+      setError(err.message || 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     /* Added pb-12 (mobile) and md:pb-20 (desktop) to push the layout footer down */
@@ -55,13 +100,19 @@ const Overview = () => {
         <h3 className="text-base font-bold text-gray-800 mb-3 px-1">Quick Actions</h3>
         <hr className="mb-4 border-gray-100" />
         <div className="flex flex-col md:flex-row gap-3">
-          <button className="bg-[#8B5CF6] text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-[#7C3AED] transition-all shadow-sm active:scale-95">
+          <button 
+            onClick={() => navigate('/institute/issue')}
+            className="bg-[#8B5CF6] text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-[#7C3AED] transition-all shadow-sm active:scale-95">
             Issue Single Certificate
           </button>
-          <button className="border-2 border-[#8B5CF6] text-[#8B5CF6] px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-purple-50 transition-all active:scale-95">
+          <button 
+            onClick={() => navigate('/institute/bulk-issue')}
+            className="border-2 border-[#8B5CF6] text-[#8B5CF6] px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-purple-50 transition-all active:scale-95">
             Bulk Upload CSV
           </button>
-          <button className="bg-[#9366E4] text-white px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-[#7C3AED] transition-all shadow-sm active:scale-95">
+          <button 
+            onClick={() => navigate('/institute/history')}
+            className="bg-[#9366E4] text-white px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-[#7C3AED] transition-all shadow-sm active:scale-95">
             View History
           </button>
         </div>

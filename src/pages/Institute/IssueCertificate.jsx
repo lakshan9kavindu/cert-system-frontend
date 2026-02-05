@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
+import { universityAPI, authAPI } from "../../services/api";
+import useMetaMask from "../../hooks/useMetaMask";
 
 const IssueCertificate = () => {
   const [formData, setFormData] = useState({
@@ -7,7 +9,16 @@ const IssueCertificate = () => {
     grade: '',
   });
   const [loading, setLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
+  
+  // MetaMask integration
+  const { 
+    connected: metamaskConnected, 
+    address: metamaskAddress, 
+    connect: connectMetaMask,
+    error: metamaskError
+  } = useMetaMask();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -26,28 +37,44 @@ const IssueCertificate = () => {
       return;
     }
 
+    // Check MetaMask connection
+    if (!metamaskConnected) {
+      setMessage({ type: 'error', text: '⚠️ Please connect MetaMask first' });
+      return;
+    }
+
     setLoading(true);
     setMessage({ type: '', text: '' });
 
     try {
+      setCurrentStep('Issuing certificate on blockchain...');
+      
       const response = await universityAPI.issueCertificate({
         student_id: formData.studentId,
         course_name: formData.courseName,
         grade: formData.grade,
       });
 
-      const certificateId = response.data?.certificate?.certificate_id || response.data?.certificate_id || response.data?.certificateId || '-'
+      const certificateId = response.data?.certificate?.certificate_id || response.data?.certificate_id || response.data?.certificateId || '-';
+      const txHash = response.data?.certificate?.blockchain_tx_hash || response.data?.blockchain_tx_hash || '-';
+      
       setMessage({ 
         type: 'success', 
-        text: '✅ Certificate issued successfully! Certificate ID: ' + certificateId 
+        text: `✅ Certificate issued successfully! Certificate ID: ${certificateId}${txHash !== '-' ? ' | TX: ' + txHash.slice(0, 10) + '...' : ''}` 
       });
       setFormData({ studentId: '', courseName: '', grade: '' });
+      setCurrentStep('');
       
-      // Clear message after 3 seconds
-      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      // Clear message after 5 seconds
+      setTimeout(() => {
+        setMessage({ type: '', text: '' });
+      }, 5000);
+      
     } catch (err) {
+      console.error('Certificate issuance error:', err);
       const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to issue certificate';
       setMessage({ type: 'error', text: '❌ ' + errorMsg });
+      setCurrentStep('');
     } finally {
       setLoading(false);
     }
@@ -69,12 +96,57 @@ const IssueCertificate = () => {
         </div>
       </div>
 
+      {/* MetaMask Connection Status */}
+      <div className={`${
+        metamaskConnected ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
+      } border-2 rounded-2xl p-5`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{metamaskConnected ? '✅' : '⚠️'}</span>
+            <div>
+              <p className={`${
+                metamaskConnected ? 'text-green-700' : 'text-orange-700'
+              } font-bold text-base`}>
+                MetaMask Status: {metamaskConnected ? 'Connected' : 'Not Connected'}
+              </p>
+              {metamaskConnected && (
+                <p className="text-xs text-gray-600 font-mono mt-1">
+                  {metamaskAddress?.slice(0, 6)}...{metamaskAddress?.slice(-4)}
+                </p>
+              )}
+            </div>
+          </div>
+          {!metamaskConnected && (
+            <button
+              type="button"
+              onClick={connectMetaMask}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all"
+            >
+              Connect MetaMask
+            </button>
+          )}
+        </div>
+        {!metamaskConnected && (
+          <p className="text-orange-600 text-xs mt-3">
+            🔒 MetaMask is required to sign and authorize the certificate for blockchain issuance
+          </p>
+        )}
+      </div>
+
       {/* 2. Main Form Card */}
       <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-2xl border border-gray-50">
         <form
           className="space-y-5 max-w-2xl mx-auto"
-          onSubmit={(e) => e.preventDefault()}
+          onSubmit={handleSubmit}
         >
+          {/* Progress indicator */}
+          {loading && currentStep && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-purple-700 font-medium text-center">
+                {currentStep}
+              </p>
+            </div>
+          )}
           {/* Student ID - Reduced input height */}
           <div className="space-y-1.5">
             <label className="block text-gray-800 font-bold text-base">
@@ -83,6 +155,9 @@ const IssueCertificate = () => {
             <input
               type="text"
               placeholder="STU12345...."
+              name="studentId"
+              value={formData.studentId}
+              onChange={handleChange}
               className="w-full p-2.5 rounded-lg border-2 border-gray-200 focus:border-[#9366E4] outline-none transition-all placeholder:text-gray-300 font-medium text-sm"
             />
             <p className="text-gray-400 text-[11px] font-medium">
@@ -98,6 +173,9 @@ const IssueCertificate = () => {
             <input
               type="text"
               placeholder="e.g..B.Tech Computer science"
+              name="courseName"
+              value={formData.courseName}
+              onChange={handleChange}
               className="w-full p-2.5 rounded-lg border-2 border-gray-200 focus:border-[#9366E4] outline-none transition-all placeholder:text-gray-300 font-medium text-sm"
             />
           </div>
@@ -110,16 +188,35 @@ const IssueCertificate = () => {
             <input
               type="text"
               placeholder="e.g.. A, 95% , First Class"
+              name="grade"
+              value={formData.grade}
+              onChange={handleChange}
               className="w-full p-2.5 rounded-lg border-2 border-gray-200 focus:border-[#9366E4] outline-none transition-all placeholder:text-gray-300 font-medium text-sm"
             />
           </div>
 
           {/* Action Button - Reduced height and padding */}
           <div className="pt-4">
-            <button className="w-full bg-[#A78BFA] hover:bg-[#8B5CF6] text-white font-extrabold py-3 rounded-xl transition-all shadow-md text-base active:scale-95">
-              Issue Certificate
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#A78BFA] hover:bg-[#8B5CF6] text-white font-extrabold py-3 rounded-xl transition-all shadow-md text-base active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading ? "Issuing Certificate..." : "🚀 Issue Certificate"}
             </button>
           </div>
+
+          {message.text && (
+            <div
+              className={`rounded-lg p-4 text-sm font-medium ${  
+                message.type === "success" ? "bg-green-50 border border-green-200 text-green-700" : 
+                message.type === "info" ? "bg-blue-50 border border-blue-200 text-blue-700" :
+                "bg-red-50 border border-red-200 text-red-700"
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
 
           {/* Note Section - Large, clean text without background */}
           <div className="mt-8 px-6">
