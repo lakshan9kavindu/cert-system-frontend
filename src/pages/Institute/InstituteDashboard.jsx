@@ -1,25 +1,24 @@
-import React from 'react';
+import React from "react";
 
 const Overview = () => {
-  // Data for the metric cards as seen in the screenshot
   const stats = [
-    { label: 'Total Certificates', value: '0' },
-    { label: 'Verification Status', value: 'Approved' },
-    { label: 'Wallet Balance', value: '0.5730' },
+    { label: "Total Certificates", value: "0" },
+    { label: "Verification Status", value: "Approved" },
+    { label: "Wallet Balance", value: "0.5730" },
   ];
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500">
+    /* Added pb-12 (mobile) and md:pb-20 (desktop) to push the layout footer down */
+    <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 pb-12 md:pb-20">
       
       {/* 1. Main Dashboard Header Banner */}
-      <div className="bg-white rounded-2xl border border-gray-300 p-5 md:p-6 flex items-start gap-4 shadow-sm">
-        <div className="bg-[#E9D5FF] p-2 rounded-lg flex items-center justify-center">
-          {/* Using Emoji to match the visual icon in screenshot */}
-          <span className="text-2xl" role="img" aria-label="dashboard-icon">📄🔍</span>
+      <div className="bg-white rounded-2xl border border-gray-300 px-6 py-8 md:py-10 flex items-center gap-5 shadow-sm min-h-[120px]">
+        <div className="bg-[#E9D5FF] p-3 rounded-xl flex items-center justify-center shrink-0">
+          <span className="text-3xl" role="img" aria-label="dashboard-icon">📄🔍</span>
         </div>
-        <div>
-          <h2 className="text-xl font-bold text-gray-800">University Dashboard</h2>
-          <p className="text-sm text-gray-400 font-medium">
+        <div className="flex flex-col justify-center">
+          <h2 className="text-2xl font-bold text-gray-800 leading-tight">University Dashboard</h2>
+          <p className="text-sm md:text-base text-gray-400 font-medium mt-1">
             Manage your institution's digital certificate issuance on the blockchain
           </p>
         </div>
@@ -28,49 +27,39 @@ const Overview = () => {
       {/* 2. Welcome Message Banner */}
       <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm">
         <h3 className="text-lg font-bold text-gray-800">Welcome to Certificate Verification Portal</h3>
-        <p className="text-sm text-gray-400 font-medium">
-          Issue and manage blockchain-verified certificates for your students
-        </p>
+        <p className="text-sm text-gray-400 font-medium">Issue and manage blockchain-verified certificates for your students</p>
       </div>
 
-      {/* 3. Metric Stats Grid (Responsive: 1 col on mobile, 3 cols on desktop) */}
+      {/* 3. Metric Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {stats.map((stat, index) => (
-          <div 
-            key={index} 
-            className="bg-white p-8 md:p-10 rounded-2xl shadow-md text-center border border-gray-50 flex flex-col items-center justify-center"
+          <div
+            key={index}
+            className="bg-white p-4 md:p-5 rounded-2xl shadow-md text-center border border-gray-50 flex flex-col items-center justify-center min-h-[120px]"
           >
-            <h4 className="text-[#374151] font-bold mb-4 text-base md:text-lg">
-              {stat.label}
-            </h4>
-            <p className="text-4xl md:text-5xl font-extrabold text-[#8B5CF6]">
-              {stat.value}
-            </p>
+            <h4 className="text-[#374151] font-bold mb-1 text-xs md:text-sm opacity-70">{stat.label}</h4>
+            <p className="text-2xl md:text-3xl font-extrabold text-[#8B5CF6] tracking-tight">{stat.value}</p>
           </div>
         ))}
       </div>
 
       {/* 4. Quick Actions Section */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm">
-        <h3 className="text-lg font-bold text-gray-800 mb-4 px-1">Quick Actions</h3>
-        
-        {/* Horizontal Divider exactly as in screenshot */}
-        <hr className="mb-6 border-gray-200" />
-        
-        <div className="flex flex-col md:flex-row gap-4">
-          <button className="bg-[#8B5CF6] text-white px-6 py-3.5 rounded-xl font-bold hover:bg-[#7C3AED] transition-all shadow-md active:scale-95">
+      <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-50">
+        <h3 className="text-base font-bold text-gray-800 mb-3 px-1">Quick Actions</h3>
+        <hr className="mb-4 border-gray-100" />
+        <div className="flex flex-col md:flex-row gap-3">
+          <button className="bg-[#8B5CF6] text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-[#7C3AED] transition-all shadow-sm active:scale-95">
             Issue Single Certificate
           </button>
-          
-          <button className="border-2 border-[#8B5CF6] text-[#8B5CF6] px-6 py-3.5 rounded-xl font-bold hover:bg-purple-50 transition-all active:scale-95">
+          <button className="border-2 border-[#8B5CF6] text-[#8B5CF6] px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-purple-50 transition-all active:scale-95">
             Bulk Upload CSV
           </button>
-          
-          <button className="bg-[#9366E4] text-white px-10 py-3.5 rounded-xl font-bold hover:bg-[#7C3AED] transition-all shadow-md active:scale-95">
+          <button className="bg-[#9366E4] text-white px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-[#7C3AED] transition-all shadow-sm active:scale-95">
             View History
           </button>
         </div>
       </div>
+
     </div>
   );
 };
