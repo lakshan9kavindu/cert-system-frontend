@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { universityAPI } from '../../services/api';
+import { universityAPI, paymentAPI } from '../../services/api';
 
 const InstituteDashboard = () => {
   const navigate = useNavigate();
@@ -25,36 +25,35 @@ const InstituteDashboard = () => {
       if (response.data) {
         const data = response.data;
         let walletBalance = '0.00';
-        
-        // Get wallet balance from payment endpoint if wallet address exists
-        if (data.institute?.wallet_address) {
-          try {
-            const balanceResponse = await fetch(`http://localhost:3001/api/payment/balance?address=${data.institute.wallet_address}`, {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('instituteToken')}`
-              }
-            });
+        let walletAddress = data.institute?.wallet_address;
 
-            if (balanceResponse.ok) {
-              const balanceData = await balanceResponse.json();
-              walletBalance = parseFloat(balanceData.data?.balancePol || '0.00').toFixed(4);
-            } else {
-              console.log('⚠️ Balance endpoint returned:', balanceResponse.status);
-            }
-          } catch (balanceErr) {
-            console.error('❌ Failed to fetch balance:', balanceErr);
+        if (!walletAddress) {
+          try {
+            const profileResponse = await universityAPI.getProfile();
+            walletAddress = profileResponse.data?.institute?.wallet_address;
+          } catch {
+            walletAddress = null;
+          }
+        }
+        
+        if (walletAddress) {
+          try {
+            const balanceResponse = await paymentAPI.getBalance(walletAddress);
+            walletBalance = parseFloat(balanceResponse.data?.data?.balancePol || '0.00').toFixed(4);
+          } catch {
+            walletBalance = '0.00';
           }
         }
         
         setStats([
           { 
             label: 'Total Certificates', 
-            value: data.totalCertificates?.toString() || '0',
+            value: data.totalCertificatesIssued?.toString() || data.totalCertificates?.toString() || '0',
             key: 'totalCertificates' 
           },
           { 
             label: 'Verification Status', 
-            value: data.institute?.verification_status || 'Approved',
+            value: data.institute?.verification_status || data.verification_status || 'Approved',
             key: 'verificationStatus' 
           },
           { 
@@ -65,8 +64,7 @@ const InstituteDashboard = () => {
         ]);
       }
     } catch (err) {
-      console.error('Failed to load dashboard:', err);
-      setError(err.response?.data?.message || 'Failed to load dashboard data');
+      setError(err.response?.data?.error || err.response?.data?.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
@@ -143,7 +141,7 @@ const InstituteDashboard = () => {
         
         <div className="flex flex-col md:flex-row gap-4">
           <button 
-            onClick={() => navigate('/institute/issue-certificate')}
+            onClick={() => navigate('/institute/issue')}
             className="bg-[#8B5CF6] text-white px-6 py-3.5 rounded-xl font-bold hover:bg-[#7C3AED] transition-all shadow-md active:scale-95"
           >
             Issue Single Certificate

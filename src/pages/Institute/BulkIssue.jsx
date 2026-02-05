@@ -115,10 +115,12 @@ const BulkUpload = () => {
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      const successful = response.data.successful || csvData.length;
+      const successCount = response.data?.successCount ?? response.data?.successful ?? csvData.length;
+      const failureCount = response.data?.failureCount ?? 0;
+      const totalCount = successCount + failureCount || csvData.length;
       setMessage({ 
         type: 'success', 
-        text: `✅ Successfully uploaded ${successful} out of ${csvData.length} certificates!` 
+        text: `✅ Successfully uploaded ${successCount} out of ${totalCount} certificates!` 
       });
 
       // Reset form after 2 seconds
@@ -131,7 +133,7 @@ const BulkUpload = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
       }, 2000);
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to upload certificates';
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to upload certificates';
       setMessage({ type: 'error', text: '❌ ' + errorMsg });
       setUploadProgress(0);
     } finally {

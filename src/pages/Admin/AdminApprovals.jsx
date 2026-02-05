@@ -82,6 +82,12 @@ export default function Pending() {
     return address.substring(0, 10) + '...' + address.substring(address.length - 8)
   }
 
+  const resolveFileUrl = (path) => {
+    if (!path) return null
+    if (path.startsWith('http://') || path.startsWith('https://')) return path
+    return `http://localhost:3001${path}`
+  }
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto">
@@ -161,10 +167,20 @@ export default function Pending() {
                   <td className="py-4 font-mono text-xs text-gray-600" title={institute.wallet_address}>
                     {truncateAddress(institute.wallet_address)}
                   </td>
-                  <td className="py-4"><ImagePlaceholder /></td>
                   <td className="py-4">
-                    {institute.verification_doc ? (
-                      <a href={institute.verification_doc} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">View Doc</a>
+                    {institute.logo_url ? (
+                      <img
+                        src={resolveFileUrl(institute.logo_url)}
+                        alt={`${institute.institute_name || 'University'} logo`}
+                        className="w-9 h-9 rounded-md object-cover border border-gray-200"
+                      />
+                    ) : (
+                      <ImagePlaceholder />
+                    )}
+                  </td>
+                  <td className="py-4">
+                    {resolveFileUrl(institute.verification_doc_url || institute.verification_doc) ? (
+                      <a href={resolveFileUrl(institute.verification_doc_url || institute.verification_doc)} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">View Doc</a>
                     ) : (
                       <span className="text-gray-400">-</span>
                     )}

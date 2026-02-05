@@ -5,6 +5,7 @@ import { adminAPI } from '../../services/api'
 export default function Universities() {
   const [institutes, setInstitutes] = useState([])
   const [issuerStatus, setIssuerStatus] = useState({})
+  const [actionLoading, setActionLoading] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -49,6 +50,28 @@ export default function Universities() {
         ...prev,
         [instituteId]: 'Error'
       }))
+    }
+  }
+
+  const handleRevoke = async (institute) => {
+    const instituteId = institute.institute_id
+    if (!instituteId) return
+    const confirmed = window.confirm(`Revoke issuer access for "${institute.institute_name || 'this university'}"?`)
+    if (!confirmed) return
+
+    try {
+      setActionLoading(prev => ({ ...prev, [instituteId]: true }))
+      await adminAPI.revokeInstitute(instituteId, { reason: 'Revoked by admin' })
+      setInstitutes(prev => prev.map(item => (
+        item.institute_id === instituteId
+          ? { ...item, verification_status: 'rejected' }
+          : item
+      )))
+      setIssuerStatus(prev => ({ ...prev, [instituteId]: 'Not Issuer' }))
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to revoke institute')
+    } finally {
+      setActionLoading(prev => ({ ...prev, [instituteId]: false }))
     }
   }
 
@@ -141,12 +164,16 @@ export default function Universities() {
                   </td>
                   <td className="py-4 text-gray-600">{formatDate(institute.created_at)}</td>
                   <td className="py-4">
-                    <button className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-red-700 transition-colors">
+                    <button
+                      onClick={() => handleRevoke(institute)}
+                      disabled={actionLoading[institute.institute_id]}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
                       <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M18 6L6 18" />
                         <path d="M6 6l12 12" />
                       </svg>
-                      Revoke
+                      {actionLoading[institute.institute_id] ? 'Revoking...' : 'Revoke'}
                     </button>
                   </td>
                 </tr>

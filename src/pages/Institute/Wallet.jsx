@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, Copy, CheckCircle2 } from 'lucide-react';
-import { universityAPI, authAPI } from '../../services/api';
+import { universityAPI, paymentAPI } from '../../services/api';
 import { useMetaMask } from '../../hooks/useMetaMask';
 
 const WalletPage = () => {
@@ -52,43 +52,41 @@ const WalletPage = () => {
       }
 
       // Step 2: Get balance from payment/balance endpoint using wallet address
+      let estimatedGasCost = '0.009000'
+
       try {
-        const balanceResponse = await fetch(`http://localhost:3001/api/payment/balance?address=${walletAddr}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('instituteToken')}`
-          }
-        });
-
-        if (!balanceResponse.ok) {
-          throw new Error(`Balance endpoint returned ${balanceResponse.status}`);
+        const gasResponse = await paymentAPI.getGasCost()
+        const gasPol = gasResponse.data?.data?.pol
+        if (gasPol) {
+          estimatedGasCost = parseFloat(gasPol).toFixed(6)
         }
+      } catch {
+        estimatedGasCost = '0.009000'
+      }
 
-        const balancePayload = await balanceResponse.json();
-        const balancePol = parseFloat(balancePayload.data?.balancePol || '0.00').toFixed(4);
-        const gasSpentPol = parseFloat(balancePayload.data?.gasSpentPol || '0.00').toFixed(4);
-
-        console.log('💰 Balance:', balancePol, 'POL');
-        console.log('⛽ Gas spent:', gasSpentPol, 'POL');
+      try {
+        const balanceResponse = await paymentAPI.getBalance(walletAddr);
+        const balancePol = parseFloat(balanceResponse.data?.data?.balancePol || '0.00').toFixed(4);
+        const gasSpentPol = parseFloat(balanceResponse.data?.data?.gasSpentPol || '0.00').toFixed(4);
 
         setWalletData({
           balance: balancePol,
           gasSpent: gasSpentPol,
           walletAddress: walletAddr,
-          estimatedGasCost: '0.009000'
+          estimatedGasCost
         });
       } catch (balanceErr) {
-        console.error('❌ Balance fetch failed:', balanceErr);
         // Fallback: show wallet address but unable to load balance
         setWalletData(prev => ({
           ...prev,
           walletAddress: walletAddr,
           balance: '0.00',
-          gasSpent: '0.00'
+          gasSpent: '0.00',
+          estimatedGasCost
         }));
         setError('Unable to load balance information. Please try again later.');
       }
     } catch (err) {
-      console.error('❌ Failed to load wallet data:', err);
       setError(err.message || 'Failed to load wallet data');
     } finally {
       setLoading(false);
@@ -140,7 +138,6 @@ const WalletPage = () => {
       }, 2000);
       
     } catch (err) {
-      console.error('Deposit error:', err);
       setMessage({ 
         type: 'error', 
         text: `❌ Deposit failed: ${err.message}` 

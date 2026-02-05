@@ -37,16 +37,17 @@ const IssueCertificate = () => {
         grade: formData.grade,
       });
 
+      const certificateId = response.data?.certificate?.certificate_id || response.data?.certificate_id || response.data?.certificateId || '-'
       setMessage({ 
         type: 'success', 
-        text: '✅ Certificate issued successfully! Certificate ID: ' + response.data.certificateId 
+        text: '✅ Certificate issued successfully! Certificate ID: ' + certificateId 
       });
       setFormData({ studentId: '', courseName: '', grade: '' });
       
       // Clear message after 3 seconds
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to issue certificate';
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to issue certificate';
       setMessage({ type: 'error', text: '❌ ' + errorMsg });
     } finally {
       setLoading(false);

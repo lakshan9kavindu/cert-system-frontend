@@ -24,8 +24,7 @@ const HistoryPage = () => {
         setCertificates([]);
       }
     } catch (err) {
-      console.error('Failed to load certificate history:', err);
-      setError(err.response?.data?.message || 'Failed to load certificate history');
+      setError(err.response?.data?.error || err.response?.data?.message || 'Failed to load certificate history');
       setCertificates([]);
     } finally {
       setLoading(false);

@@ -36,7 +36,11 @@ api.interceptors.response.use(
       localStorage.removeItem('studentToken');
       localStorage.removeItem('instituteToken');
       localStorage.removeItem('adminToken');
-      window.location.href = '/login';
+      if (window.location.pathname.startsWith('/admin')) {
+        window.location.href = '/admin/login';
+      } else {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -105,9 +109,21 @@ export const universityAPI = {
   
   issueCertificate: (data) => 
     api.post('/university/certificate/issue', data),
+
+  getSignPayload: (data) =>
+    api.post('/university/certificate/sign-payload', data),
+
+  issueSignedCertificate: (data) =>
+    api.post('/university/certificate/issue-signed', data),
   
   bulkIssueCertificates: (data) => 
     api.post('/university/certificates/bulk', data),
+
+  getBulkAuthMessage: (data) =>
+    api.post('/university/certificate/bulk-auth', data),
+
+  bulkIssueSigned: (data) =>
+    api.post('/university/certificate/bulk-issue-signed', data),
   
   getCertificates: () => 
     api.get('/university/certificates'),
@@ -133,12 +149,18 @@ export const adminAPI = {
   
   rejectInstitute: (instituteId, data) => 
     api.post(`/admin/institutes/${instituteId}/reject`, data),
+
+  revokeInstitute: (instituteId, data) =>
+    api.post(`/admin/institutes/${instituteId}/revoke`, data),
   
   getIssuerStatus: (instituteId) => 
     api.get(`/admin/institutes/${instituteId}/issuer-status`),
   
   getStatistics: () => 
     api.get('/admin/statistics'),
+
+  getBlockchainStatus: () =>
+    api.get('/admin/blockchain/status'),
 };
 
 // ==================== VERIFY APIs (Public) ====================
@@ -149,6 +171,36 @@ export const verifyAPI = {
   
   getUserCertificates: (userId) => 
     api.get(`/verify/user/${userId}`),
+};
+
+// ==================== PAYMENT APIs ====================
+
+export const paymentAPI = {
+  getGasCost: () =>
+    api.get('/payment/gas-cost'),
+
+  getBalance: (address) =>
+    api.get(`/payment/balance?address=${address}`),
+
+  issueWithMetamask: (data) =>
+    api.post('/payment/issue-with-metamask', data),
+
+  bulkIssue: (data) =>
+    api.post('/payment/bulk-issue', data),
+};
+
+// ==================== METAMASK APIs ====================
+
+export const metamaskAPI = {
+  getStatus: () =>
+    api.get('/metamask/status'),
+};
+
+// ==================== CERTIFICATE APIs (MetaMask) ====================
+
+export const certificateAPI = {
+  issueWithMetamask: (data) =>
+    api.post('/certificates/issue-with-metamask', data),
 };
 
 // ==================== UTILITY FUNCTIONS ====================
