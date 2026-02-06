@@ -14,6 +14,14 @@ export default function StudentDashboard() {
   const [isPortfolioPublic, setIsPortfolioPublic] = useState(true); // Default to public, updated from backend
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [visibilityMessage, setVisibilityMessage] = useState('');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editedProfile, setEditedProfile] = useState({});
+  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
+  const [cvFile, setCvFile] = useState(null);
+  const [githubLink, setGithubLink] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
 
   // Fetch dashboard data on mount
   useEffect(() => {
@@ -30,6 +38,11 @@ export default function StudentDashboard() {
       const visibility = response.data.student?.isPortfolioPublic ?? response.data.student?.is_portfolio_public;
       if (visibility !== undefined && visibility !== null) {
         setIsPortfolioPublic(Boolean(visibility));
+      }
+
+      // Initialize GitHub link from student data
+      if (response.data.student?.github_url) {
+        setGithubLink(response.data.student.github_url);
       }
     } catch (err) {
       if (err.response?.status === 401) {
@@ -85,6 +98,65 @@ export default function StudentDashboard() {
       fetchDashboardData();
     } finally {
       setSavingVisibility(false);
+    }
+  };
+
+  const handleEditProfile = () => {
+    setIsEditingProfile(true);
+    setEditedProfile({
+      full_name: student?.full_name || '',
+      email: student?.email || '',
+      gender: student?.gender || '',
+      birthdate: student?.birthdate || ''
+    });
+    setProfileMessage('');
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingProfile(false);
+    setEditedProfile({});
+    setProfilePhoto(null);
+    setProfilePhotoPreview(null);
+    setCvFile(null);
+    setProfileMessage('');
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setSavingProfile(true);
+      setProfileMessage('');
+
+      const formData = new FormData();
+      formData.append('full_name', editedProfile.full_name);
+      formData.append('email', editedProfile.email);
+      formData.append('gender', editedProfile.gender);
+      formData.append('birthdate', editedProfile.birthdate);
+      formData.append('github_url', githubLink);
+      
+      if (profilePhoto) {
+        formData.append('profile_photo', profilePhoto);
+      }
+      if (cvFile) {
+        formData.append('cv', cvFile);
+      }
+
+      await studentAPI.updateProfile(formData);
+      
+      setProfileMessage('Profile updated successfully!');
+      setIsEditingProfile(false);
+      setProfilePhoto(null);
+      setProfilePhotoPreview(null);
+      setCvFile(null);
+      setTimeout(() => setProfileMessage(''), 3000);
+      
+      // Refresh dashboard data
+      fetchDashboardData();
+    } catch (err) {
+      console.error('Failed to update profile:', err);
+      setProfileMessage('Failed to update profile. Please try again.');
+      setTimeout(() => setProfileMessage(''), 4000);
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -610,62 +682,246 @@ export default function StudentDashboard() {
 
             {/* Account Information */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">Account Information</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-800">Account Information</h3>
+                {!isEditingProfile ? (
+                  <button
+                    onClick={handleEditProfile}
+                    className="bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center gap-2"
+                  >
+                    <span>✏️</span> Edit Profile
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCancelEdit}
+                      disabled={savingProfile}
+                      className="bg-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-400 transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={savingProfile}
+                      className="bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {savingProfile ? '⏳ Saving...' : '💾 Save Changes'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {profileMessage && (
+                <div className={`text-sm mb-4 px-3 py-2 rounded-lg ${
+                  profileMessage.includes('Failed') 
+                    ? 'bg-red-100 text-red-700' 
+                    : 'bg-green-100 text-green-700'
+                }`}>
+                  {profileMessage}
+                </div>
+              )}
+
               <div className="space-y-4">
+                {/* Profile Photo */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Profile Photo
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                      {profilePhotoPreview ? (
+                        <img 
+                          src={profilePhotoPreview}
+                          alt="Profile Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : student?.profile_photo_url ? (
+                        <img 
+                          src={`${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3001'}${student.profile_photo_url}`}
+                          alt="Profile"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-3xl">👤</span>
+                      )}
+                    </div>
+                    {isEditingProfile && (
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            setProfilePhoto(file);
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setProfilePhotoPreview(reader.result);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                          className="text-sm"
+                        />
+                        {profilePhoto && (
+                          <p className="text-xs text-green-600 mt-1">✓ {profilePhoto.name}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Full Name */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Full Name
                   </label>
                   <input
                     type="text"
-                    defaultValue={student?.full_name}
-                    disabled
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-gray-50"
+                    value={isEditingProfile ? editedProfile.full_name : student?.full_name || ''}
+                    onChange={(e) => setEditedProfile({...editedProfile, full_name: e.target.value})}
+                    disabled={!isEditingProfile}
+                    className={`w-full border border-gray-300 rounded-lg px-4 py-2 ${
+                      isEditingProfile ? 'bg-white' : 'bg-gray-50'
+                    }`}
                   />
                 </div>
+
+                {/* Email */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Email
                   </label>
                   <input
                     type="email"
-                    defaultValue={student?.email}
-                    disabled
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-gray-50"
+                    value={isEditingProfile ? editedProfile.email : student?.email || ''}
+                    onChange={(e) => setEditedProfile({...editedProfile, email: e.target.value})}
+                    disabled={!isEditingProfile}
+                    className={`w-full border border-gray-300 rounded-lg px-4 py-2 ${
+                      isEditingProfile ? 'bg-white' : 'bg-gray-50'
+                    }`}
                   />
                 </div>
+
+                {/* GitHub Link */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    GitHub Profile
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={githubLink}
+                      onChange={(e) => setGithubLink(e.target.value)}
+                      placeholder="https://github.com/username"
+                      disabled={!isEditingProfile}
+                      className={`flex-1 border border-gray-300 rounded-lg px-4 py-2 ${
+                        isEditingProfile ? 'bg-white' : 'bg-gray-50'
+                      }`}
+                    />
+                    {githubLink && !isEditingProfile && (
+                      <a
+                        href={githubLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-900 transition-colors flex items-center gap-2"
+                      >
+                        <span>🔗</span> Visit
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* CV Upload */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Resume/CV
+                  </label>
+                  <div className="flex items-center gap-3">
+                    {student?.cv_url && !isEditingProfile ? (
+                      <a
+                        href={`${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3001'}${student.cv_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2"
+                      >
+                        <span>📄</span> View CV
+                      </a>
+                    ) : (
+                      !isEditingProfile && (
+                        <p className="text-sm text-gray-500">No CV uploaded</p>
+                      )
+                    )}
+                    {isEditingProfile && (
+                      <div>
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx"
+                          onChange={(e) => setCvFile(e.target.files[0])}
+                          className="text-sm"
+                        />
+                        {cvFile && (
+                          <p className="text-xs text-green-600 mt-1">✓ {cvFile.name}</p>
+                        )}
+                        {student?.cv_url && (
+                          <p className="text-xs text-gray-500 mt-1">Current: {student.cv_url.split('/').pop()}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Portfolio URL */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Portfolio URL
                   </label>
                   <input
                     type="text"
-                    defaultValue={`http://localhost:3000/portfolio/${student?.userId}`}
+                    value={`${window.location.origin}/portfolio/${student?.userId}`}
                     disabled
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-gray-50"
                   />
                 </div>
+
+                {/* Gender and Birthdate */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Gender
                     </label>
-                    <input
-                      type="text"
-                      defaultValue={student?.gender}
-                      disabled
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-gray-50"
-                    />
+                    {isEditingProfile ? (
+                      <select
+                        value={editedProfile.gender}
+                        onChange={(e) => setEditedProfile({...editedProfile, gender: e.target.value})}
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-white"
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={student?.gender || ''}
+                        disabled
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-gray-50"
+                      />
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Birthdate
                     </label>
                     <input
-                      type="text"
-                      defaultValue={student?.birthdate}
-                      disabled
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-gray-50"
+                      type={isEditingProfile ? "date" : "text"}
+                      value={isEditingProfile ? editedProfile.birthdate : student?.birthdate || ''}
+                      onChange={(e) => setEditedProfile({...editedProfile, birthdate: e.target.value})}
+                      disabled={!isEditingProfile}
+                      className={`w-full border border-gray-300 rounded-lg px-4 py-2 ${
+                        isEditingProfile ? 'bg-white' : 'bg-gray-50'
+                      }`}
                     />
                   </div>
                 </div>

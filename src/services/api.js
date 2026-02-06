@@ -99,6 +99,11 @@ export const studentAPI = {
   
   updatePortfolioVisibility: (isPublic) => 
     api.patch('/student/portfolio/visibility', { isPublic }),
+
+  updateProfile: (formData) => 
+    api.patch('/student/profile', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
 };
 
 // ==================== UNIVERSITY APIs ====================

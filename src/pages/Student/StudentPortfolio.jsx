@@ -18,7 +18,10 @@ export default function StudentPortfolio() {
     totalCertificates: 0,
     blockchainVerified: 0,
     institutions: 0,
-    activeCertificates: 0
+    activeCertificates: 0,
+    profilePhotoUrl: null,
+    cvUrl: null,
+    githubUrl: null
   })
 
   const [certificates, setCertificates] = useState([])
@@ -45,13 +48,16 @@ export default function StudentPortfolio() {
           const { student, certificates: certs, careerInsights: insights } = response.data
         
         setStudentData({
-          name: student.full_name,
-          userId: student.user_id,
+          name: student.fullName || student.full_name,
+          userId: student.userId || student.user_id,
           email: student.email,
           totalCertificates: certs.length,
           blockchainVerified: certs.filter(c => c.blockchain_tx_hash).length,
           institutions: new Set(certs.map(c => c.institute_id)).size,
-          activeCertificates: certs.filter(c => !c.expiry_date || new Date(c.expiry_date) > new Date()).length
+          activeCertificates: certs.filter(c => !c.expiry_date || new Date(c.expiry_date) > new Date()).length,
+          profilePhotoUrl: student.profilePhotoUrl || student.profile_photo_url,
+          cvUrl: student.cvUrl || student.cv_url,
+          githubUrl: student.githubUrl || student.github_url
         })
         
         setCertificates(certs)
@@ -97,7 +103,10 @@ export default function StudentPortfolio() {
           totalCertificates: statistics.totalCertificates,
           blockchainVerified: statistics.blockchainVerifiedCount,
           institutions: statistics.institutionsCount,
-          activeCertificates: statistics.activeCertificatesCount
+          activeCertificates: statistics.activeCertificatesCount,
+          profilePhotoUrl: student.profile_photo_url,
+          cvUrl: student.cv_url,
+          githubUrl: student.github_url
         })
         
         setCertificates(certs)
@@ -176,23 +185,55 @@ export default function StudentPortfolio() {
         {/* Profile Header */}
         <div className="bg-gradient-to-r from-purple-500 to-blue-500 rounded-3xl p-12 text-center mb-8 shadow-xl">
           <div className="flex justify-center mb-6">
-            <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center text-6xl shadow-lg">
-              {studentData.name.charAt(0).toUpperCase()}
+            <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center text-6xl shadow-lg overflow-hidden">
+              {studentData.profilePhotoUrl ? (
+                <img 
+                  src={`${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3001'}${studentData.profilePhotoUrl}`}
+                  alt={studentData.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{studentData.name.charAt(0).toUpperCase()}</span>
+              )}
             </div>
           </div>
           <h1 className="text-4xl font-bold text-white mb-2">{studentData.name}</h1>
           <p className="text-xl text-purple-100 mb-4">Professional Portfolio</p>
           <p className="text-sm text-purple-200">Student ID: {studentData.userId}</p>
           
-          {/* Share Button for authenticated users */}
-          {isOwnPortfolio && (
-            <button 
-              onClick={copyPortfolioLink}
-              className="mt-6 bg-white text-purple-600 px-6 py-3 rounded-lg font-bold hover:bg-purple-50 transition-all shadow-md inline-flex items-center gap-2"
-            >
-              <span>🔗</span> Share My Portfolio
-            </button>
-          )}
+          {/* Action Buttons */}
+          <div className="flex flex-wrap justify-center gap-3 mt-6">
+            {isOwnPortfolio && (
+              <button 
+                onClick={copyPortfolioLink}
+                className="bg-white text-purple-600 px-6 py-3 rounded-lg font-bold hover:bg-purple-50 transition-all shadow-md inline-flex items-center gap-2"
+              >
+                <span>🔗</span> Share My Portfolio
+              </button>
+            )}
+            
+            {studentData.githubUrl && (
+              <a
+                href={studentData.githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-gray-800 text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-900 transition-all shadow-md inline-flex items-center gap-2"
+              >
+                <span>💻</span> GitHub Profile
+              </a>
+            )}
+            
+            {studentData.cvUrl && (
+              <a
+                href={`${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3001'}${studentData.cvUrl}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition-all shadow-md inline-flex items-center gap-2"
+              >
+                <span>📄</span> Download CV
+              </a>
+            )}
+          </div>
         </div>
 
         {/* Stats Cards */}
