@@ -23,12 +23,6 @@ export default function StudentHeader() {
         {/* Navigation */}
         <nav className="flex items-center gap-6">
           <Link 
-            to="/studentdashboard" 
-            className="text-white no-underline font-medium hover:opacity-90 transition-opacity"
-          >
-            Home
-          </Link>
-          <Link 
             to="/studentportfolio" 
             className="text-white no-underline font-medium hover:opacity-90 transition-opacity"
           >
