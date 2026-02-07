@@ -122,7 +122,7 @@ export default function StudentDashboard() {
       full_name: student?.full_name || '',
       email: student?.email || '',
       gender: student?.gender || '',
-      birthdate: student?.birthdate || ''
+      birthdate: formatDateOnly(student?.birthdate)
     });
     setProfileMessage('');
   };
