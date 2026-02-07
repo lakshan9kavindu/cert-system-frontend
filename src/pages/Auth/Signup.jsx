@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import studentImage from '../../assets/images/studentSignup.webp'
 import instituteImage from '../../assets/images/instituteSignup.webp'
 import logoImage from '../../assets/images/logo.webp'
@@ -7,6 +7,7 @@ import { authAPI, setStudentToken, setUniversityToken } from '../../services/api
 
 export default function Signup() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [userType, setUserType] = useState('student')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -32,6 +33,15 @@ export default function Signup() {
     logo: null,
     verificationDoc: null,
   })
+
+  useEffect(() => {
+    const role = new URLSearchParams(location.search).get('role')
+    if (role === 'institute') {
+      setUserType('institute')
+      setError('')
+      setSuccessMessage('')
+    }
+  }, [location.search])
 
   const handleStudentChange = (e) => {
     const { name, value } = e.target
