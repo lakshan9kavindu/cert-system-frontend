@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
+import logoImage from '../assets/images/logo.webp'
 import { clearAllTokens } from '../services/api'
 
 export default function StudentHeader() {
@@ -14,7 +15,9 @@ export default function StudentHeader() {
       <div className="max-w-[1248px] mx-auto flex items-center justify-between gap-3 px-3 md:px-4 py-3">
         {/* Logo/Brand */}
         <div className="flex items-center">
-          <h1 className="text-2xl font-bold italic m-0">CertiChain</h1>
+          <Link to="/" className="inline-flex items-center">
+            <img src={logoImage} alt="CertiChain" className="h-7 md:h-8 w-auto" />
+          </Link>
         </div>
 
         {/* Navigation */}
