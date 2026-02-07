@@ -145,9 +145,18 @@ export default function StudentDashboard() {
       formData.append('full_name', editedProfile.full_name);
       formData.append('email', editedProfile.email);
       formData.append('gender', editedProfile.gender);
-      formData.append('birthdate', editedProfile.birthdate);
+      const birthdateValue = formatDateOnly(editedProfile.birthdate);
+      if (birthdateValue) {
+        formData.append('birthdate', birthdateValue);
+      }
       formData.append('github_url', githubLink);
       
+      if (profilePhoto && profilePhoto.type && !profilePhoto.type.startsWith('image/')) {
+        setProfileMessage('Profile photo must be an image file.');
+        setSavingProfile(false);
+        return;
+      }
+
       if (profilePhoto) {
         formData.append('profile_photo', profilePhoto);
       }
@@ -827,6 +836,12 @@ export default function StudentDashboard() {
                           accept="image/*"
                           onChange={(e) => {
                             const file = e.target.files[0];
+                            if (file && file.type && !file.type.startsWith('image/')) {
+                              setProfileMessage('Profile photo must be an image file.');
+                              setProfilePhoto(null);
+                              setProfilePhotoPreview(null);
+                              return;
+                            }
                             setProfilePhoto(file);
                             if (file) {
                               const reader = new FileReader();
