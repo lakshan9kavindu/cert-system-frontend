@@ -87,7 +87,7 @@ const InstituteDashboard = () => {
       {/* 1. Main Dashboard Header Banner */}
       <div className="bg-white rounded-2xl border border-gray-300 px-6 py-8 md:py-10 flex items-center gap-5 shadow-sm min-h-[120px]">
         <div className="bg-[#E9D5FF] p-3 rounded-xl flex items-center justify-center shrink-0">
-          <span className="text-3xl" role="img" aria-label="dashboard-icon">📄🔍</span>
+          <span className="material-icons text-3xl" aria-hidden="true">fact_check</span>
         </div>
         <div className="flex flex-col justify-center">
           <h2 className="text-2xl font-bold text-gray-800 leading-tight">University Dashboard</h2>

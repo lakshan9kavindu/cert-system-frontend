@@ -58,9 +58,7 @@ const HistoryPage = () => {
       {/* Header Banner */}
       <div className="bg-white rounded-2xl border border-gray-300 px-6 py-8 md:py-10 flex items-start gap-4 shadow-sm min-h-[120px]">
         <div className="text-2xl bg-[#E9D5FF] p-2 rounded-lg shrink-0">
-          <span role="img" aria-label="history-icon">
-            📊
-          </span>
+          <span className="material-icons text-2xl" aria-hidden="true">bar_chart</span>
         </div>
         <div>
           <h2 className="text-xl font-bold text-gray-800">
